@@ -14,3 +14,4 @@ def fundamentalMatrix(corners1, corners2):
     u1,s1,v1 = np.linalg.svd(f) 
     s2 = np.array([[s1[0], 0, 0], [0, s1[1], 0], [0, 0, 0]]) # Constraining Fundamental Matrix to Rank 2
     F = u1 @ s2 @ v1
+    return F

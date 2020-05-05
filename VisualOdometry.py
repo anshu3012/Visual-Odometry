@@ -87,10 +87,11 @@ class VisualOdometry:
             y1 = pts1[i,1]
             x2 = pts2[i,0]
             y2 = pts2[i,1]
-            A[i] = np.array([x1*x2, x1*y2, x1, y1*x2, y2*y1, y1, x2, y2, 1])
+            A[i] = np.array([x1*x2, y1*x2, x2, x1*y2, y1*y2, y2, x1, y1, 1])
+            #A[i] = np.array([x1*x2, x1*y2, x1, y1*x2, y1*y2, y1, x2, y2, 1])
 
         U, S, VT = np.linalg.svd(A, full_matrices=True)     # Take SVD of A
-        f = VT[-1].reshape(3,3)                             # Last column of V matrix
+        f = VT[-1].reshape((3,3))                             # Last column of V matrix
         
         # Constrain Fundamental Matrix to Rank 2
         u1,s1,v1 = np.linalg.svd(f) 
@@ -161,8 +162,15 @@ class VisualOdometry:
     @param      
     @return       
     '''
-    def getEssentialMatrix(self):
-        pass
+    def getEssentialMatrix(self, F, K):
+        e = K.T @ F @ K
+
+        # Constrain Essential Matrix to have specific singular values
+        U,S,VT = np.linalg.svd(e) 
+        S2 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]]) 
+        E = U @ S2 @ VT
+
+        return E
 
     
     '''
@@ -224,6 +232,9 @@ class VisualOdometry:
 
 
 if __name__ == '__main__':
+    K = np.array([[964.828979,  0,          643.788025],
+                  [0,           964.828979, 484.40799 ],
+                  [0,           0,          1         ]])
     # Read test images
     image1 = cv2.imread('test1.png', 0)       
     image2 = cv2.imread('test2.png', 0) 
@@ -238,12 +249,13 @@ if __name__ == '__main__':
     print(in1.shape)
     print(in2.shape)
 
-    F0 = None
+    F = None
     if (in1.shape[0] >= 8):
-        F0 = vOdom.getFundamentalMatrix(in1, in2)
-    print(F0)
-
-    F,_ = cv2.findFundamentalMat(pts1,pts2,cv2.FM_LMEDS)
+        F = vOdom.getFundamentalMatrix(in1, in2)
 
     print(F)
+
+    E = vOdom.getEssentialMatrix(F, K)
+    print(E)
+
 

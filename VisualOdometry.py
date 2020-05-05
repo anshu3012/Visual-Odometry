@@ -6,6 +6,7 @@ Copyright (c) 2020 Hao Da (Kevin) Dong, Anshuman Singh
 @license    This project is released under the BSD-3-Clause license.
 '''
 
+import random
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -26,7 +27,7 @@ class VisualOdometry:
     @param      
     @return       
     '''
-    def findPointCorrespondences(self, image1, image2):
+    def findFeatureMatches(self, image1, image2):
         # Initiate SIFT detector
         orb = cv2.ORB_create()
 
@@ -73,7 +74,7 @@ class VisualOdometry:
 
 
     '''
-    @brief      Estimate Fundamental matrix from point correspondences using RANSAC
+    @brief      Estimate Fundamental matrix from feature matches
     @param      
     @return       
     '''
@@ -100,6 +101,62 @@ class VisualOdometry:
     
     
     '''
+    @brief      Reject outliers from a set of feature matches using RANSAC
+    @param      
+    @return       
+    '''
+    def rejectFeatureMatchOutliers(self, pts1, pts2, iterations=100, epsilon=0.001):
+        # Variable to keep track of the max number of inliers so far
+        numInliers = 0
+
+        # Stores indices of inliers
+        inlierIndices = []
+
+        for i in range(0, iterations): 
+            # Inlier count for this iteration
+            count = 0
+
+            # Inlier indices for this iteration
+            tempInlierIndices = []
+
+            # Set of 8 feature matches to construct F matrix
+            modelPoints1 = []
+            modelPoints2 = []
+            
+            # Generate 8 random indices
+            randomIndices = random.sample(range(0, pts1.shape[0]), 8)
+
+            for index in randomIndices:
+                modelPoints1.append(pts1[index])
+                modelPoints2.append(pts2[index])
+
+            # Compute Fundamental Matrix from model points
+            F = self.getFundamentalMatrix(np.array(modelPoints1), np.array(modelPoints2))
+
+            for j in range(pts1.shape[0]):
+                x1 = np.array([[pts1[j,0]], [pts1[j,1]], [1]])
+                x2 = np.array([[pts2[j,0]], [pts2[j,1]], [1]])
+                error = np.linalg.norm(x2.T @ F @ x1)
+
+                # If x2.T * F * x1 is less than epsilon then count the match as an inlier
+                if (error < epsilon):
+                    count += 1
+                    tempInlierIndices.append(j)
+            
+            # Update numInliers and inlierIndices if necessary
+            if (count > numInliers):
+                numInliers = count
+                inlierIndices = tempInlierIndices
+
+        # Extract inliers from pts1 and pts2
+        inliers1 = np.array([pts1[i] for i in inlierIndices])
+        inliers2 = np.array([pts2[i] for i in inlierIndices])
+
+        return inliers1, inliers2
+
+
+
+    '''
     @brief      Estimate Essential matrix from Fundamental matrix F by accounting for camera calibration parameters
     @param      
     @return       
@@ -122,7 +179,7 @@ class VisualOdometry:
     @param      
     @return       
     '''
-    def runApplication(self, videoFile, saveVideo=False):
+    def runApplication(self):
         # Create video stream object
         videoCapture = cv2.VideoCapture(videoFile)
         
@@ -173,9 +230,17 @@ if __name__ == '__main__':
 
     vOdom = VisualOdometry()
 
-    pts1, pts2 = vOdom.findPointCorrespondences(image1, image2)
+    pts1, pts2 = vOdom.findFeatureMatches(image1, image2)
 
-    F0 = vOdom.getFundamentalMatrix(pts1, pts2)
+    in1, in2 = vOdom.rejectFeatureMatchOutliers(pts1, pts2)
+    print(pts1.shape)
+    print(pts2.shape)
+    print(in1.shape)
+    print(in2.shape)
+
+    F0 = None
+    if (in1.shape[0] >= 8):
+        F0 = vOdom.getFundamentalMatrix(in1, in2)
     print(F0)
 
     F,_ = cv2.findFundamentalMat(pts1,pts2,cv2.FM_LMEDS)
